@@ -1901,7 +1901,9 @@ async function aplicarImport(dados){
    O Edge e o Chrome deixam o app gravar num arquivo que o Matheus escolhe (ex.: na pasta do Google Drive).
    O app guarda o "endereço" desse arquivo e, a cada mudança, regrava o arquivo inteiro com todos os dados.
    Se o navegador for limpo, basta escolher o mesmo arquivo de novo: os dados voltam dele. */
-const temArquivoAPI="showSaveFilePicker" in window;
+// no celular o app não grava em arquivo (o Drive do celular não é uma pasta comum): quem faz a cópia no Drive é o computador
+const ehCelular=/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+const temArquivoAPI="showSaveFilePicker" in window&&!ehCelular;
 // espera um instante antes de gravar, para juntar várias mudanças seguidas numa gravação só
 function agendarAuto(){
   if(S.auto.estado!=="ok")return;
