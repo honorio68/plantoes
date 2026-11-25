@@ -1926,11 +1926,16 @@ function agendarAuto(){
   if(S.auto.estado!=="ok")return;
   clearTimeout(S.auto.timer);S.auto.timer=setTimeout(salvarNoArquivo,800);
 }
+// espera no máximo "ms" milissegundos. O Google Drive sem conexão às vezes não responde nunca, e o app
+// ficava parado esperando (sem carregar, sem sincronizar). Com o prazo, o app segue e só avisa do arquivo.
+function comPrazo(promessa,ms){
+  return Promise.race([promessa,new Promise((_,erro)=>setTimeout(()=>erro(new Error("prazo")),ms))]);
+}
 async function salvarNoArquivo(){
   const h=S.auto.handle;if(!h||S.auto.estado!=="ok")return;
   try{
     const txt=JSON.stringify(await dadosDoApp(),null,1);
-    const w=await h.createWritable();await w.write(txt);await w.close();
+    const w=await comPrazo(h.createWritable(),20000);await comPrazo(w.write(txt),20000);await comPrazo(w.close(),20000);
     S.auto.ultimo=new Date();
   }catch(err){S.auto.estado=err?.name==="NotAllowedError"?"pedir":"erro"}
   renderAuto();
@@ -2001,7 +2006,7 @@ function renderAuto(){
     warn=true;barra=`O navegador pede a sua permissão para continuar salvando em ${nome}. <button class="btn small primary" data-auto="continuar">Continuar salvando</button>`;
     cfg=`<p style="margin:0"><b>Pausado:</b> falta a sua permissão para salvar em ${nome}.</p><div class="formactions"><button class="btn primary" data-auto="continuar">Continuar salvando</button><button class="btn" data-auto="escolher">Escolher outro arquivo</button></div>`;
   }else if(a.estado==="erro"){
-    warn=true;barra=`Não consegui salvar em ${nome}. Ele foi movido ou apagado? <button class="btn small primary" data-auto="escolher">Escolher o arquivo de novo</button>`;
+    warn=true;barra=`Não consegui salvar em ${nome}. Ele foi movido ou apagado, ou o Google Drive está sem conexão? <button class="btn small primary" data-auto="escolher">Escolher o arquivo de novo</button>`;
     cfg=`<p style="margin:0"><b>Com problema:</b> não consegui gravar em ${nome}.</p><div class="formactions"><button class="btn primary" data-auto="escolher">Escolher o arquivo de novo</button></div>`;
   }else if(a.estado==="conflito"){
     warn=true;barra=`O arquivo ${nome} já tem <b>${a.conflito.nArq}</b> atendimentos e este computador tem <b>${a.conflito.nApp}</b>. Quais dados você quer manter? <button class="btn small primary" data-auto="arquivo">Os do arquivo</button><button class="btn small" data-auto="app">Os deste computador</button>`;
@@ -2963,8 +2968,8 @@ async function boot(){
   if(temArquivoAPI){
     try{
       const h=await pedido(loja("config").get("arquivo"));
-      if(h&&h.queryPermission&&arquivoPermitido(h)){S.auto.handle=h;S.auto.estado=(await h.queryPermission({mode:"readwrite"}))==="granted"?"ok":"pedir"}
-    }catch{}
+      if(h&&h.queryPermission&&arquivoPermitido(h)){S.auto.handle=h;S.auto.estado=(await comPrazo(h.queryPermission({mode:"readwrite"}),5000))==="granted"?"ok":"pedir"}
+    }catch{if(S.auto.handle)S.auto.estado="erro"} // o arquivo não respondeu (ex.: Google Drive travado): o app segue sem ele
   }
   renderAuto();
   S.loadedMonth=null;await ensureMonth(S.day.slice(0,7));
